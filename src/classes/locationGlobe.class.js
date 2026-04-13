@@ -21,7 +21,9 @@ class LocationGlobe {
 
         this.lastgeo = {};
         this.conns = [];
-
+        this._satelliteItems = [];
+        this._eventMarkers = [];
+        this._liveSatelliteRetries = 0;
 
         setTimeout(() => {
             let container = document.getElementById("mod_globe_innercontainer");
@@ -104,19 +106,8 @@ class LocationGlobe {
                 this.conns.splice(index, 1);
             };
 
-            // Add random satellites
-            let constellation = [];
-            for(var i = 0; i< 2; i++){
-                for(var j = 0; j< 3; j++){
-                    constellation.push({
-                        lat: 50 * i - 30 + 15 * Math.random(),
-                        lon: 120 * j - 120 + 30 * i,
-                        altitude: Math.random() * (1.7 - 1.3) + 1.3
-                    });
-                }
-            }
-
-            this.globe.addConstellation(constellation);
+            // Add live satellite and event data
+            this._initLiveGlobeData();
         }, 2000);
 
         // Init updaters when intro animation is done
@@ -138,6 +129,116 @@ class LocationGlobe {
         const randomLong = this.getRandomInRange(-180, 0, 3);
         this.globe.addMarker(randomLat, randomLong, '');
         this.globe.addMarker(randomLat - 20, randomLong + 150, '', true);
+    }
+    async _fetchJSON(url) {
+        try {
+            if (typeof fetch !== 'function') {
+                throw new Error('fetch unavailable');
+            }
+            const resp = await fetch(url);
+            if (!resp.ok) {
+                throw new Error(`HTTP ${resp.status}`);
+            }
+            return await resp.json();
+        } catch (error) {
+            console.warn('LocationGlobe fetch failed:', url, error);
+            throw error;
+        }
+    }
+    async _initLiveGlobeData() {
+        await this.updateLiveSatellites();
+        await this.updateLiveEvents();
+
+        this.satelliteUpdater = setInterval(() => {
+            this.updateLiveSatellites();
+        }, 15000);
+
+        this.eventUpdater = setInterval(() => {
+            this.updateLiveEvents();
+        }, 300000);
+    }
+    _clearEventMarkers() {
+        this._eventMarkers.forEach(marker => marker.remove());
+        this._eventMarkers = [];
+    }
+    _loadFallbackSatellites() {
+        if (this._satelliteItems.length > 0) {
+            return;
+        }
+        let constellation = [];
+        for (var i = 0; i < 2; i++) {
+            for (var j = 0; j < 3; j++) {
+                constellation.push({
+                    lat: 50 * i - 30 + 15 * Math.random(),
+                    lon: 120 * j - 120 + 30 * i,
+                    altitude: Math.random() * (1.7 - 1.3) + 1.3
+                });
+            }
+        }
+        this._satelliteItems = this.globe.addConstellation(constellation);
+    }
+    async updateLiveSatellites() {
+        if (!this.globe || window.mods.netstat.offline) {
+            return;
+        }
+
+        try {
+            const issData = await this._fetchJSON('https://api.open-notify.org/iss-now.json');
+            if (issData && issData.message === 'success' && issData.iss_position) {
+                const lat = parseFloat(issData.iss_position.latitude);
+                const lon = parseFloat(issData.iss_position.longitude);
+                const altitude = 1.35;
+
+                this._satelliteItems.forEach(item => item.remove());
+                this._satelliteItems = [];
+
+                const issSatellite = this.globe.addSatellite(lat, lon, altitude, {
+                    waveColor: '#33fcff',
+                    coreColor: '#32aaff',
+                    shieldColor: '#88e7ff',
+                    size: 1.3
+                });
+                this._satelliteItems.push(issSatellite);
+                this._liveSatelliteRetries = 0;
+            } else {
+                throw new Error('Unexpected ISS response');
+            }
+        } catch (error) {
+            this._liveSatelliteRetries += 1;
+            if (this._liveSatelliteRetries > 1) {
+                this._loadFallbackSatellites();
+            }
+        }
+    }
+    async updateLiveEvents() {
+        if (!this.globe || window.mods.netstat.offline) {
+            return;
+        }
+
+        try {
+            const data = await this._fetchJSON('https://eonet.gsfc.nasa.gov/api/v3/events?status=open');
+            if (!data || !Array.isArray(data.events)) {
+                throw new Error('Unexpected EONET response');
+            }
+
+            this._clearEventMarkers();
+
+            const events = data.events.filter(event => event.geometry && event.geometry.length > 0);
+            events.slice(0, 3).forEach(event => {
+                let geom = event.geometry.find(g => g.type === 'Point') || event.geometry[0];
+                if (!geom || !Array.isArray(geom.coordinates)) {
+                    return;
+                }
+                const [lon, lat] = geom.coordinates;
+                const marker = this.globe.addMarker(lat, lon, event.title, false, 1.2, '#ff3333');
+                this._eventMarkers.push(marker);
+                setTimeout(() => {
+                    marker.remove();
+                }, 60000);
+            });
+        } catch (error) {
+            console.warn('Could not update NASA event markers:', error);
+        }
     }
     addTemporaryConnectedMarker(ip) {
         let data = window.mods.netstat.geoLookup.get(ip);
