@@ -134,6 +134,9 @@ on Windows:
 - `npm run install-windows`
 - `npm run start`
 
+> Note: this project uses an older Electron/node-pty build path. The Windows install script now skips the deprecated `windows-build-tools` auto-installer and instead installs dependencies without running preinstall hooks.
+> If `node-pty` still fails, run `npm run rebuild-node-pty` from the repo root.
+
 #### Building
 Note: Due to native modules, you can only build targets for the host OS you are using.
 
