@@ -1,4 +1,4 @@
-name: Build packaged binaries
+name: Build Windows packaged binary
 
 on:
   push:
@@ -11,150 +11,23 @@ on:
       - main
 
 jobs:
-  build-linux:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 14
-          cache: 'npm'
-      - name: Cache Electron binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/electron
-          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-      - name: Install build deps
-        run: npm install
-      - name: Run prebuild script
-        run: npm run prebuild-linux
-      - name: Build for x64 / ia32
-        run: ./node_modules/.bin/electron-builder build -l --x64 --ia32
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Linux-AppImages
-          path: dist/*.AppImage
-          if-no-files-found: error
-
-  build-linux-arm32:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v1
-        with:
-          platforms: arm
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 14
-          cache: 'npm'
-      - name: Cache Electron binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/electron
-          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-      - name: Run prebuild outside of QEMU emulator
-        run: npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
-      - name: Build for arm32v7 (aka armv7l)
-        uses: docker://arm32v7/node:14-buster
-        with:
-          args: bash -c "npm i -g npm@7 && npm install && ./node_modules/.bin/electron-builder build -l --armv7l"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Linux-arm32-AppImage
-          path: dist/*.AppImage
-          if-no-files-found: error
-
-  build-linux-arm64:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup QEMU
-        uses: docker/setup-qemu-action@v1
-        with:
-          platforms: arm64
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 14
-          cache: 'npm'
-      - name: Cache Electron binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/electron
-          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-      - name: Run prebuild outside of QEMU emulator
-        run: npm install && rsync -a --info=progress2 src/ prebuild-src --exclude node_modules && node prebuild-minify.js && rm -rf node_modules
-      - name: Build for arm64 (aka arm64v8)
-        uses: docker://arm64v8/node:14-buster
-        with:
-          args: bash -c "npm i -g npm@7 && npm install && ./node_modules/.bin/electron-builder build -l --arm64"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: Linux-arm64-AppImage
-          path: dist/*.AppImage
-          if-no-files-found: error
-
   build-windows:
     runs-on: windows-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
       - uses: actions/checkout@v4
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 14
+          node-version: 16
           cache: 'npm'
-      - name: Get npm cache directory
-        id: npm-cache
-        run: |
-          echo "::set-output name=dir::$(npm config get cache)"
-      - name: Cache Electron binaries
-        uses: actions/cache@v4
-        with:
-          path: ${{ runner.os }}-build-cache-electron
-          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-      - name: npm install
-        run: npm install
-      - name: npm build
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Windows installer
         run: npm run build-windows
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-Installer
           path: dist/*.exe
-          if-no-files-found: error
-
-  build-darwin:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 14
-          cache: 'npm'
-      - name: Cache Electron binaries
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Caches/electron
-          key: ${{ runner.os }}-electron-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-      - name: npm install
-        run: npm install
-      - name: npm build
-        run: npm run build-darwin
-      - uses: actions/upload-artifact@v4
-        with:
-          name: MacOS-Image
-          path: dist/*.dmg
           if-no-files-found: error
