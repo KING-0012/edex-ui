@@ -12,42 +12,30 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-2022
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      GYP_MSVS_VERSION: 2022
-      npm_config_msvs_version: 2022
-      npm_config_build_from_source: false
-      npm_config_target_arch: x64
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Setup MSVC Build Tools
-        uses: microsoft/setup-msbuild@v2
-        with:
-          msbuild-architecture: x64
-      - name: Setup Visual Studio environment
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-      - name: Setup Node.js
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 16
-          cache: 'npm'
-      - name: Configure Node build tools
+
+      - name: Install Dependencies
         run: |
-          npm config set msvs_version 2022
-          npm config set python python3
-      - name: Install root dependencies
-        run: npm ci
-      - name: Prebuild Windows app (with MSVC env)
-        shell: cmd
+          npm install --ignore-scripts
+          npm install @homebridge/node-pty-prebuilt-multiarch
+
+      - name: Build and Package
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat" x64
           npm run prebuild-windows
-      - name: Build Windows installer
-        run: npm run build-windows
-      - uses: actions/upload-artifact@v4
+          npm run build-windows
+
+      - name: Upload Installer
+        uses: actions/upload-artifact@v4
         with:
           name: Windows-Installer
           path: dist/*.exe
