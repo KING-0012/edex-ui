@@ -12,7 +12,7 @@ on:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    runs-on: windows-2022
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       GYP_MSVS_VERSION: 2022
@@ -21,6 +21,14 @@ jobs:
       npm_config_target_arch: x64
     steps:
       - uses: actions/checkout@v4
+      - name: Setup MSVC Build Tools
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+      - name: Setup Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
