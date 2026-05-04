@@ -41,6 +41,7 @@ jobs:
       - name: Install root dependencies
         run: npm ci
       - name: Prebuild Windows app (with MSVC env)
+        shell: cmd
         run: |
           call "C:\\Program Files\\Microsoft Visual Studio\\2022\\Enterprise\\VC\\Auxiliary\\Build\\vcvarsall.bat" x64
           npm run prebuild-windows
